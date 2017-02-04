@@ -12690,7 +12690,11 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     MayHaveConvFixit = true;
     break;
   case IncompatiblePointer:
-    if (Action == AA_Passing_CFAudited)
+    // GHUMVEE patch - be very strict about Atomic->Non-Atomic assignments
+    if (SrcType->getPointeeType()->isAtomicType() &&
+        !DstType->getPointeeType()->isAtomicType())
+      DiagKind = diag::err_atomic_to_non_atomic_pointer_assignment;
+    else if (Action == AA_Passing_CFAudited)
       DiagKind = diag::err_arc_typecheck_convert_incompatible_pointer;
     else if (SrcType->isFunctionPointerType() &&
              DstType->isFunctionPointerType())

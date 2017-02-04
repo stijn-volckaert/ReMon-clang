@@ -2343,11 +2343,13 @@ static void DiagnoseBadFunctionCast(Sema &Self, const ExprResult &SrcExpr,
 }
 
 /// Check the semantics of a C-style cast operation, in C.
-void CastOperation::CheckCStyleCast() {
+void CastOperation::CheckCStyleCast()
+{
   assert(!Self.getLangOpts().CPlusPlus);
 
   // C-style casts can resolve __unknown_any types.
-  if (claimPlaceholder(BuiltinType::UnknownAny)) {
+  if (claimPlaceholder(BuiltinType::UnknownAny))
+  {
     SrcExpr = Self.checkUnknownAnyCast(DestRange, DestType,
                                        SrcExpr.get(), Kind,
                                        ValueKind, BasePath);
@@ -2381,6 +2383,12 @@ void CastOperation::CheckCStyleCast() {
   if (SrcExpr.isInvalid())
     return;
   QualType SrcType = SrcExpr.get()->getType();
+
+  // MVEE patch: forbid casting between atomic and non-atomic types
+  if (DestType->isPointerType() && SrcType->isPointerType())
+  {
+
+  }
 
   assert(!SrcType->isPlaceholderType());
 
@@ -2611,6 +2619,22 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
   CastOperation Op(*this, CastTypeInfo->getType(), CastExpr);  
   Op.DestRange = CastTypeInfo->getTypeLoc().getSourceRange();
   Op.OpRange = SourceRange(LPLoc, CastExpr->getLocEnd());
+
+  // GHUMVEE patch - forbid pointer to pointer casts if exactly
+  // one of the pointers points to an atomic type
+  QualType DestType = Op.DestType;
+  QualType SrcType  = Op.SrcExpr.get()->getType();
+
+  if (DestType->isPointerType() && SrcType->isPointerType())
+  {
+    if (SrcType->getPointeeType()->isAtomicType() && !DestType->getPointeeType()->isAtomicType())
+    {
+      Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_atomic_pointer_cast)
+        << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
+      Op.SrcExpr = ExprError();
+      return ExprError();
+    }
+  }
 
   if (getLangOpts().CPlusPlus) {
     Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ false,

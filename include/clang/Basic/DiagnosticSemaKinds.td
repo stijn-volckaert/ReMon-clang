@@ -5996,6 +5996,8 @@ def err_bad_static_cast_overload : Error<
 def err_bad_cstyle_cast_overload : Error<
   "address of overloaded function %0 cannot be cast to type %1">;
 
+def err_illegal_atomic_pointer_cast : Error<
+  "Atomic->Non-Atomic pointer cast from %0 to %1 is not allowed">;
 
 def err_bad_cxx_cast_generic : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
@@ -6778,7 +6780,10 @@ def err_typecheck_call_too_many_args_at_most_suggest : Error<
 def err_arc_typecheck_convert_incompatible_pointer : Error<
   "incompatible pointer types passing retainable parameter of type %0"
   "to a CF function expecting %1 type">;
-  
+def err_atomic_to_non_atomic_pointer_assignment : Error<
+  "assignment operation discards Atomic qualifier of source type %0"
+  "target type is %1">;
+
 def err_builtin_fn_use : Error<"builtin functions must be directly called">;
 
 def warn_call_wrong_number_of_arguments : Warning<
@@ -7069,6 +7074,8 @@ let CategoryName = "Inline Assembly Issue" in {
     "invalid output constraint '%0' in asm">;
   def err_asm_invalid_lvalue_in_input : Error<
     "invalid lvalue in asm input for constraint '%0'">;
+  def err_asm_atomic_operand : Error<
+      "asm statement has an operand with an atomic type qualifier: '%0' - use stdatomic instead!">;
   def err_asm_invalid_input_constraint : Error<
     "invalid input constraint '%0' in asm">;
   def err_asm_immediate_expected : Error<"constraint '%0' expects "
