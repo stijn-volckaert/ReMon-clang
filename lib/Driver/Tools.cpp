@@ -6442,6 +6442,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // push the flag to the backend
+  if (Args.hasArg(options::OPT_fatomicize))
+  {
+	  CmdArgs.push_back("-mllvm");
+	  CmdArgs.push_back("-atomicize");
+  }
+
   // Forward -Xclang arguments to -cc1, and -mllvm arguments to the LLVM option
   // parser.
   Args.AddAllArgValues(CmdArgs, options::OPT_Xclang);
@@ -10219,6 +10226,14 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
   // The profile runtime also needs access to system libraries.
   getToolChain().addProfileRTLibs(Args, CmdArgs);
+
+  // link with libsync if we're compiling with -fatomicize
+  if (Args.hasArg(options::OPT_fatomicize))
+  {
+	  CmdArgs.push_back("--as-needed");
+	  CmdArgs.push_back(ToolChain.getCompilerRTArgString(Args, "sync", true /*shared*/));
+	  CmdArgs.push_back("--no-as-needed");
+  }
 
   if (D.CCCIsCXX() &&
       !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {

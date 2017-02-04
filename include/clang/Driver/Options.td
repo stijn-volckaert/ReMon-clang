@@ -2474,6 +2474,9 @@ defm stack_arrays : BooleanFFlag<"stack-arrays">, Group<gfortran_Group>;
 defm underscoring : BooleanFFlag<"underscoring">, Group<gfortran_Group>;
 defm whole_file : BooleanFFlag<"whole-file">, Group<gfortran_Group>;
 
+// atomicize flags
+def atomicize_Group : OptionGroup<"atomicize_Group">;
+def fatomicize : Flag<["-"], "fatomicize">, Group<atomicize_Group>;
 
 include "CC1Options.td"
 
