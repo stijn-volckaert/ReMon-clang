@@ -2622,17 +2622,31 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
 
   // GHUMVEE patch - forbid pointer to pointer casts if exactly
   // one of the pointers points to an atomic type
-  QualType DestType = Op.DestType;
-  QualType SrcType  = Op.SrcExpr.get()->getType();
-
-  if (DestType->isPointerType() && SrcType->isPointerType())
+  if (getLangOpts().Atomicize)
   {
-    if (SrcType->getPointeeType()->isAtomicType() && !DestType->getPointeeType()->isAtomicType())
+    QualType DestType = Op.DestType;
+    QualType SrcType = Op.SrcExpr.get()->getType();
+
+    if (DestType->isPointerType() && SrcType->isPointerType())
     {
-      Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_atomic_pointer_cast)
-        << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
-      Op.SrcExpr = ExprError();
-      return ExprError();
+      if (SrcType->getPointeeType()->isAtomicType() &&
+              !DestType->getPointeeType()->isAtomicType())
+      {
+        Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_atomic_pointer_cast)
+                << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
+        Op.SrcExpr = ExprError();
+        return ExprError();
+      }
+
+      // also do this for pointers to volatile vars
+      if (SrcType->getPointeeType().isVolatileQualified() &&
+              !DestType->getPointeeType().isVolatileQualified())
+      {
+        Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_volatile_pointer_cast)
+                << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
+        Op.SrcExpr = ExprError();
+        return ExprError();
+      }
     }
   }
 

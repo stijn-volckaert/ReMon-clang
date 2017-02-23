@@ -875,6 +875,8 @@ def fuse_line_directives : Flag<["-"], "fuse-line-directives">, Group<f_Group>,
   Flags<[CC1Option]>;
 def fno_use_line_directives : Flag<["-"], "fno-use-line-directives">, Group<f_Group>;
 
+def fatomicize : Flag<["-"], "fatomicize">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Enforce stronger pointer casting discipline for ReMon">;
 def ffreestanding : Flag<["-"], "ffreestanding">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Assert that the compilation takes place in a freestanding environment">;
 def fgnu_keywords : Flag<["-"], "fgnu-keywords">, Group<f_Group>, Flags<[CC1Option]>,
@@ -2473,10 +2475,6 @@ defm sign_zero : BooleanFFlag<"sign-zero">, Group<gfortran_Group>;
 defm stack_arrays : BooleanFFlag<"stack-arrays">, Group<gfortran_Group>;
 defm underscoring : BooleanFFlag<"underscoring">, Group<gfortran_Group>;
 defm whole_file : BooleanFFlag<"whole-file">, Group<gfortran_Group>;
-
-// atomicize flags
-def atomicize_Group : OptionGroup<"atomicize_Group">;
-def fatomicize : Flag<["-"], "fatomicize">, Group<atomicize_Group>;
 
 include "CC1Options.td"
 

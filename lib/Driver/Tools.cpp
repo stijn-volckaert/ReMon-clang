@@ -6447,6 +6447,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   {
 	  CmdArgs.push_back("-mllvm");
 	  CmdArgs.push_back("-atomicize");
+
+      // forward langopt to cc1
+      CmdArgs.push_back("-fatomicize");
   }
 
   // Forward -Xclang arguments to -cc1, and -mllvm arguments to the LLVM option

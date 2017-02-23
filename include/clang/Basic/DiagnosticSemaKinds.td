@@ -5997,7 +5997,11 @@ def err_bad_cstyle_cast_overload : Error<
   "address of overloaded function %0 cannot be cast to type %1">;
 
 def err_illegal_atomic_pointer_cast : Error<
-  "Atomic->Non-Atomic pointer cast from %0 to %1 is not allowed">;
+  "Cast from %0 to %1 discards Atomic qualifier. This is not allowed in -fatomicize mode.">;
+
+def err_illegal_volatile_pointer_cast : Error<
+  "Cast from %0 to %1 discards volatile qualifier. This is not allowed in -fatomicize mode.">;
+
 
 def err_bad_cxx_cast_generic : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
