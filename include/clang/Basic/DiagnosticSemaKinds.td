@@ -7080,6 +7080,8 @@ let CategoryName = "Inline Assembly Issue" in {
     "invalid lvalue in asm input for constraint '%0'">;
   def err_asm_atomic_operand : Error<
       "asm statement has an operand with an atomic type qualifier: '%0' - use stdatomic instead!">;
+  def err_asm_volatile_operand : Error<
+      "asm statement has an operand with a volatile type qualifier: '%0' - use stdatomic instead!">;	  
   def err_asm_invalid_input_constraint : Error<
     "invalid input constraint '%0' in asm">;
   def err_asm_immediate_expected : Error<"constraint '%0' expects "

@@ -316,15 +316,28 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
 
     Expr *InputExpr = Exprs[i];
 
-    if ((InputExpr->getType()->isPointerType() &&
-        InputExpr->getType()->getPointeeType()->isAtomicType()) ||
-        InputExpr->getType()->isAtomicType())
-    {
-      return StmtError(Diag(InputExpr->getLocStart(),
-                            diag::err_asm_atomic_operand)
-                         << InputExpr
-                         << InputExpr->getSourceRange());
-    }
+  if (getLangOpts().Atomicize)
+  {
+      if ((InputExpr->getType()->isPointerType() &&
+           InputExpr->getType()->getPointeeType()->isAtomicType()) ||
+          InputExpr->getType()->isAtomicType())
+      {
+          return StmtError(Diag(InputExpr->getLocStart(),
+                                diag::err_asm_atomic_operand)
+                                   << InputExpr
+                                   << InputExpr->getSourceRange());
+      }
+
+      if ((InputExpr->getType()->isPointerType() &&
+           InputExpr->getType()->getPointeeType().isVolatileQualified()) ||
+          InputExpr->getType().isVolatileQualified())
+      {
+          return StmtError(Diag(InputExpr->getLocStart(),
+                                diag::err_asm_volatile_operand)
+                                   << InputExpr
+                                   << InputExpr->getSourceRange());
+      }
+  }
 
     // Referring to parameters is not allowed in naked functions.
     if (CheckNakedParmReference(InputExpr, *this))
