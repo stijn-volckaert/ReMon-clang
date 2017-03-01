@@ -1286,6 +1286,10 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
     OS << ')';
     break;
 
+  case AttributedType::attr_nonsync:
+	OS << "NonSync";
+	break;
+
   case AttributedType::attr_vector_size: {
     OS << "__vector_size__(";
     if (const VectorType *vector =T->getEquivalentType()->getAs<VectorType>()) {

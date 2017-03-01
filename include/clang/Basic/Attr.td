@@ -1715,6 +1715,11 @@ def WarnUnusedResult : InheritableAttr {
   let Documentation = [WarnUnusedResultsDocs];
 }
 
+def NonSync : InheritableAttr {
+  let Spellings = [GCC<"nonsync">];
+  let Documentation = [Undocumented];
+}
+
 def Weak : InheritableAttr {
   let Spellings = [GCC<"weak">];
   let Subjects = SubjectList<[Var, Function, CXXRecord]>;

@@ -154,8 +154,8 @@ public:
 
   enum {
     /// The maximum supported address space number.
-    /// 23 bits should be enough for anyone.
-    MaxAddressSpace = 0x7fffffu,
+    /// 22 bits should be enough for anyone.
+    MaxAddressSpace = 0x3fffffu,
 
     /// The width of the "fast" qualifier mask.
     FastWidth = 3,
@@ -201,6 +201,15 @@ public:
       L.removeAddressSpace();
       R.removeAddressSpace();
     }
+
+	if (L.hasNonSync() == R.hasNonSync()) {
+		if (L.hasNonSync())
+			Q.setNonSync();
+		else
+			Q.removeNonSync();
+		L.removeNonSync();
+		R.removeNonSync();
+	}
     return Q;
   }
 
@@ -344,6 +353,10 @@ public:
     setAddressSpace(space);
   }
 
+	bool hasNonSync() const { return Mask & NonSyncMask; }
+	void setNonSync() { Mask |= NonSyncMask; }
+	void removeNonSync() { Mask &= ~NonSyncMask; }
+
   // Fast qualifiers are those that can be allocated directly
   // on a QualType object.
   bool hasFastQualifiers() const { return getFastQualifiers(); }
@@ -391,6 +404,8 @@ public:
         addObjCGCAttr(Q.getObjCGCAttr());
       if (Q.hasObjCLifetime())
         addObjCLifetime(Q.getObjCLifetime());
+	  if (Q.hasNonSync())
+		  setNonSync();
     }
   }
 
@@ -408,6 +423,8 @@ public:
         removeObjCLifetime();
       if (getAddressSpace() == Q.getAddressSpace())
         removeAddressSpace();
+	  if (hasNonSync() == Q.hasNonSync())
+		  removeNonSync();
     }
   }
 
@@ -420,6 +437,8 @@ public:
            !hasObjCGCAttr() || !qs.hasObjCGCAttr());
     assert(getObjCLifetime() == qs.getObjCLifetime() ||
            !hasObjCLifetime() || !qs.hasObjCLifetime());
+	assert(hasNonSync() == Q.hasNonSync() ||
+		   !hasNonSync() || !Q.hasNonSync());
     Mask |= qs.Mask;
   }
 
@@ -522,8 +541,8 @@ public:
 
 private:
 
-  // bits:     |0 1 2|3|4 .. 5|6  ..  8|9   ...   31|
-  //           |C R V|U|GCAttr|Lifetime|AddressSpace|
+  // bits:     |0 1 2|3|4 .. 5|6  ..  8|9|10   ...   31|
+  //           |C R V|U|GCAttr|Lifetime|N| AddressSpace|
   uint32_t Mask;
 
   static const uint32_t UMask = 0x8;
@@ -532,9 +551,10 @@ private:
   static const uint32_t GCAttrShift = 4;
   static const uint32_t LifetimeMask = 0x1C0;
   static const uint32_t LifetimeShift = 6;
+  static const uint32_t NonSyncMask = 0x200;
   static const uint32_t AddressSpaceMask =
-      ~(CVRMask | UMask | GCAttrMask | LifetimeMask);
-  static const uint32_t AddressSpaceShift = 9;
+      ~(CVRMask | UMask | GCAttrMask | LifetimeMask | NonSyncMask);
+  static const uint32_t AddressSpaceShift = 10;
 };
 
 /// A std::pair-like structure for storing a qualified type split
@@ -696,6 +716,10 @@ public:
 
   /// \brief Determine whether this type is volatile-qualified.
   bool isVolatileQualified() const;
+
+	bool isNonSyncQualified() const {
+		return getQualifiers().hasNonSync();
+	}
 
   /// \brief Determine whether this particular QualType instance has any
   /// qualifiers, without looking through any typedefs that might add
@@ -1020,6 +1044,10 @@ public:
     return getQualifiers().hasStrongOrWeakObjCLifetime();
   }
 
+	bool hasNonSync() const {
+		return getQualifiers().hasNonSync();
+	}
+
   enum DestructionKind {
     DK_none,
     DK_cxx_destructor,
@@ -1216,6 +1244,8 @@ public:
 
   bool hasAddressSpace() const { return Quals.hasAddressSpace(); }
   unsigned getAddressSpace() const { return Quals.getAddressSpace(); }
+
+	bool hasNonSync() const { return Quals.hasNonSync(); }
 
   const Type *getBaseType() const { return BaseType; }
 
@@ -3832,6 +3862,7 @@ public:
     attr_null_unspecified,
     attr_objc_kindof,
     attr_objc_inert_unsafe_unretained,
+	attr_nonsync
   };
 
 private:

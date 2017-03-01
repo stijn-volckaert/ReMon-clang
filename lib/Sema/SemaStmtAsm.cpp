@@ -214,6 +214,38 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
     return NS;
   }
 
+  // GHUMVEE patch
+  if (getLangOpts().Atomicize)
+  {
+	  Expr* expr = nullptr;
+
+	  for (unsigned i = 0; i != NumOutputs + NumInputs; ++i)
+	  {
+		  expr = Exprs[i];
+
+		  if ((expr->getType()->isPointerType() &&
+			   expr->getType()->getPointeeType()->isAtomicType()) ||
+			  expr->getType()->isAtomicType())
+		  {
+			  return StmtError(Diag(expr->getLocStart(),
+									diag::err_asm_atomic_operand)
+							   << expr
+							   << expr->getSourceRange());
+		  }
+
+		  if ((expr->getType()->isPointerType() &&
+			   expr->getType()->getPointeeType().isVolatileQualified()) ||
+			  expr->getType().isVolatileQualified())
+		  {
+			  return StmtError(Diag(expr->getLocStart(),
+									diag::err_asm_volatile_operand)
+							   << expr
+							   << expr->getSourceRange());
+		  }
+	  }
+  }
+
+
   for (unsigned i = 0; i != NumOutputs; i++) {
     StringLiteral *Literal = Constraints[i];
     assert(Literal->isAscii());
@@ -315,29 +347,6 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
     Exprs[i] = ER.get();
 
     Expr *InputExpr = Exprs[i];
-
-  if (getLangOpts().Atomicize)
-  {
-      if ((InputExpr->getType()->isPointerType() &&
-           InputExpr->getType()->getPointeeType()->isAtomicType()) ||
-          InputExpr->getType()->isAtomicType())
-      {
-          return StmtError(Diag(InputExpr->getLocStart(),
-                                diag::err_asm_atomic_operand)
-                                   << InputExpr
-                                   << InputExpr->getSourceRange());
-      }
-
-      if ((InputExpr->getType()->isPointerType() &&
-           InputExpr->getType()->getPointeeType().isVolatileQualified()) ||
-          InputExpr->getType().isVolatileQualified())
-      {
-          return StmtError(Diag(InputExpr->getLocStart(),
-                                diag::err_asm_volatile_operand)
-                                   << InputExpr
-                                   << InputExpr->getSourceRange());
-      }
-  }
 
     // Referring to parameters is not allowed in naked functions.
     if (CheckNakedParmReference(InputExpr, *this))

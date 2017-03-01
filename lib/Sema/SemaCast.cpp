@@ -25,6 +25,7 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Initialization.h"
 #include "llvm/ADT/SmallVector.h"
+#include "clang/AST/Type.h"
 #include <set>
 using namespace clang;
 
@@ -2640,13 +2641,21 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
 
       // also do this for pointers to volatile vars
       if (SrcType->getPointeeType().isVolatileQualified() &&
-              !DestType->getPointeeType().isVolatileQualified())
+		  !DestType->getPointeeType().isVolatileQualified())
       {
-        Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_volatile_pointer_cast)
-                << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
-        Op.SrcExpr = ExprError();
-        return ExprError();
-      }
+		  if (SrcType->getPointeeType().isNonSyncQualified())
+		  {
+			  llvm::errs() << "Allowing cast that discards volatile qualifier because source type is non-sync qualified.\n";
+
+		  }
+		  else
+		  {
+			  Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_volatile_pointer_cast)
+				  << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
+			  Op.SrcExpr = ExprError();
+			  return ExprError();
+		  }
+	  }
     }
   }
 

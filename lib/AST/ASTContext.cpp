@@ -2298,6 +2298,13 @@ ASTContext::getAddrSpaceQualType(QualType T, unsigned AddressSpace) const {
   return getExtQualType(TypeNode, Quals);
 }
 
+QualType ASTContext::getNonSyncQualType(QualType T) const {
+	QualifierCollector Quals;
+	const Type *TypeNode = Quals.strip(T);
+	Quals.setNonSync();
+	return getExtQualType(TypeNode, Quals);
+}
+
 QualType ASTContext::getObjCGCQualType(QualType T,
                                        Qualifiers::GC GCAttr) const {
   QualType CanT = getCanonicalType(T);

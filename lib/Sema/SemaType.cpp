@@ -4995,6 +4995,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_TypeNullUnspecified;
   case AttributedType::attr_objc_kindof:
     return AttributeList::AT_ObjCKindOf;
+  case AttributedType::attr_nonsync:
+    return AttributeList::AT_NonSync;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -6824,6 +6826,13 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       attr.setUsedAsTypeAttr();
       hasOpenCLAddressSpace = true;
       break;
+	case AttributeList::AT_NonSync:
+		//llvm::errs() << "Saw NonSync qualified type:\n ";
+		//type.dump();
+		type = state.getSema().Context.getNonSyncQualType(type);
+		//llvm::errs() << "New Type: " << type.
+		attr.setUsedAsTypeAttr();
+		break;
     OBJC_POINTER_TYPE_ATTRS_CASELIST:
       if (!handleObjCPointerTypeAttr(state, attr, type))
         distributeObjCPointerTypeAttr(state, attr, type);
