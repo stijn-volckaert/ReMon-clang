@@ -2126,6 +2126,29 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
   llvm::InlineAsm *IA =
     llvm::InlineAsm::get(FTy, AsmString, Constraints, HasSideEffect,
                          /* IsAlignStack */ false, AsmDialect);
+
+  if (getLangOpts().Atomicize)
+  {
+	  const Expr* expr = nullptr;
+	  unsigned TotalArgs = S.getNumOutputs() + S.getNumInputs();
+	  unsigned Outputs   = S.getNumOutputs();
+
+	  for (unsigned i = 0; i != TotalArgs; ++i)
+	  {
+		  if (i < Outputs)
+			  expr = S.getOutputExpr(i);
+		  else
+			  expr = S.getInputExpr(i-Outputs);
+
+		  if ((expr->getType()->isPointerType() &&
+			   expr->getType()->getPointeeType()->isAtomicType()) ||
+			  expr->getType()->isAtomicType())
+		  {
+			  IA->setAtomicOperand(i);
+		  }
+	  }
+  }
+
   llvm::CallInst *Result = Builder.CreateCall(IA, Args);
   Result->addAttribute(llvm::AttributeSet::FunctionIndex,
                        llvm::Attribute::NoUnwind);

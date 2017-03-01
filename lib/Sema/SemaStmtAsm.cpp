@@ -218,6 +218,7 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
   if (getLangOpts().Atomicize)
   {
 	  Expr* expr = nullptr;
+	  unsigned atomics = 0; 
 
 	  for (unsigned i = 0; i != NumOutputs + NumInputs; ++i)
 	  {
@@ -227,20 +228,25 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
 			   expr->getType()->getPointeeType()->isAtomicType()) ||
 			  expr->getType()->isAtomicType())
 		  {
-			  return StmtError(Diag(expr->getLocStart(),
-									diag::err_asm_atomic_operand)
-							   << expr
-							   << expr->getSourceRange());
+			  if (++atomics > 1)
+			  {
+				  return StmtError(Diag(expr->getLocStart(),
+										diag::err_asm_atomic_operand)
+								   << expr
+								   << expr->getSourceRange());
+			  }
 		  }
-
-		  if ((expr->getType()->isPointerType() &&
+		  else if ((expr->getType()->isPointerType() &&
 			   expr->getType()->getPointeeType().isVolatileQualified()) ||
 			  expr->getType().isVolatileQualified())
 		  {
-			  return StmtError(Diag(expr->getLocStart(),
-									diag::err_asm_volatile_operand)
-							   << expr
-							   << expr->getSourceRange());
+			  if (++atomics > 1)
+			  {
+				  return StmtError(Diag(expr->getLocStart(),
+										diag::err_asm_volatile_operand)
+								   << expr
+								   << expr->getSourceRange());
+			  }
 		  }
 	  }
   }
