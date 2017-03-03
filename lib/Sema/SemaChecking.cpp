@@ -2819,6 +2819,18 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
     return ExprError();
   }
 
+  // In -fatomicize mode, require the first arg to be volatile or atomic qualified
+  if (getLangOpts().Atomicize)
+  {
+    if (!ValType.isVolatileQualified() &&
+        !ValType->isAtomicType())
+    {
+      Diag(TheCall->getExprLoc(), diag::err_atomic_call_requires_volatile)
+          << Ptr << Ptr->getType();
+      return ExprError();
+    }
+  }
+
   switch (ValType.getObjCLifetime()) {
   case Qualifiers::OCL_None:
   case Qualifiers::OCL_ExplicitNone:
@@ -3042,6 +3054,18 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     Diag(DRE->getLocStart(), diag::err_atomic_builtin_must_be_pointer_intptr)
       << FirstArg->getType() << FirstArg->getSourceRange();
     return ExprError();
+  }
+
+  // In -fatomicize mode, require the first arg to be volatile or atomic qualified
+  if (getLangOpts().Atomicize)
+  {
+    if (!ValType.isVolatileQualified() &&
+         !ValType->isAtomicType())
+    {
+      Diag(TheCall->getExprLoc(), diag::err_sync_call_requires_volatile)
+          << FirstArg << FirstArg->getType();
+      return ExprError();
+    }
   }
 
   switch (ValType.getObjCLifetime()) {

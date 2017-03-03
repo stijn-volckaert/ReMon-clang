@@ -2633,20 +2633,27 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
       if (SrcType->getPointeeType()->isAtomicType() &&
               !DestType->getPointeeType()->isAtomicType())
       {
-        Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_atomic_pointer_cast)
-                << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
-        Op.SrcExpr = ExprError();
-        return ExprError();
+		  if (DestType->getPointeeType().isNonSyncQualified())
+		  {
+			  llvm::errs() << "Allowing cast that discards atomic qualifier because dest type is non-sync qualified.\n";
+		  }
+		  else
+		  {
+			  Op.Self.Diag(Op.OpRange.getBegin(), diag::err_illegal_atomic_pointer_cast)
+				  << Op.SrcExpr.get()->getType() << DestType << Op.OpRange;
+			  Op.SrcExpr = ExprError();
+			  return ExprError();
+		  }
       }
 
       // also do this for pointers to volatile vars
       if (SrcType->getPointeeType().isVolatileQualified() &&
 		  !DestType->getPointeeType().isVolatileQualified())
       {
-		  if (SrcType->getPointeeType().isNonSyncQualified())
+		  if (SrcType->getPointeeType().isNonSyncQualified() ||
+			  DestType->getPointeeType().isNonSyncQualified())
 		  {
 			  llvm::errs() << "Allowing cast that discards volatile qualifier because source type is non-sync qualified.\n";
-
 		  }
 		  else
 		  {

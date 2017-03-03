@@ -214,41 +214,56 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
     return NS;
   }
 
-  // GHUMVEE patch
+  // In atomicize mode, check if the inline asm block contains atomic instructions.
+  // If so, figure out if their operands are properly qualified.
   if (getLangOpts().Atomicize)
   {
 	  Expr* expr = nullptr;
-	  unsigned atomics = 0; 
+	  std::set<Expr*> qualifiedExprs;
+    bool isAtomic = false;
+    bool hasControlFlow = false;
+
+    std::string lower = AsmString->getString().lower();
+
+    if (lower.find("lock") != std::string::npos ||
+        lower.find("xchg") != std::string::npos)
+      isAtomic = true;
+
+    if (lower.find("jmp") != std::string::npos ||
+        lower.find("call") != std::string::npos)
+      hasControlFlow = true;
+
+    if (isAtomic && hasControlFlow)
+      return StmtError(Diag(expr->getLocStart(), diag::err_asm_atomic_op_has_control_flow));
 
 	  for (unsigned i = 0; i != NumOutputs + NumInputs; ++i)
 	  {
 		  expr = Exprs[i];
 
-		  if ((expr->getType()->isPointerType() &&
-			   expr->getType()->getPointeeType()->isAtomicType()) ||
-			  expr->getType()->isAtomicType())
-		  {
-			  if (++atomics > 1)
-			  {
-				  return StmtError(Diag(expr->getLocStart(),
-										diag::err_asm_atomic_operand)
-								   << expr
-								   << expr->getSourceRange());
-			  }
-		  }
-		  else if ((expr->getType()->isPointerType() &&
-			   expr->getType()->getPointeeType().isVolatileQualified()) ||
-			  expr->getType().isVolatileQualified())
-		  {
-			  if (++atomics > 1)
-			  {
-				  return StmtError(Diag(expr->getLocStart(),
-										diag::err_asm_volatile_operand)
-								   << expr
-								   << expr->getSourceRange());
-			  }
-		  }
+      // true if the expr is a pointer to a volatile or atomic qualified variable that is not marked as nonsync
+      bool isQualifiedPointer = expr->getType()->isPointerType() &&
+                                 (expr->getType()->getPointeeType()->isAtomicType() ||
+                                  expr->getType()->getPointeeType().isVolatileQualified()) &&
+                                 !expr->getType()->getPointeeType().isNonSyncQualified();
+      // true if the expr is a volatile or atomic qualified variable that is not marked as nonsync
+      bool isQualifiedNonPointer = (expr->getType()->isAtomicType()
+                                    || expr->getType().isVolatileQualified()) &&
+          !expr->getType().isNonSyncQualified();
+
+		  if (isQualifiedPointer || isQualifiedNonPointer)
+      {
+        qualifiedExprs.insert(expr);
+
+        if (qualifiedExprs.size() > 1)
+        {
+          return StmtError(Diag(expr->getLocStart(),
+                                diag::err_asm_atomic_operand));
+        }
+      }
 	  }
+
+    if (isAtomic && qualifiedExprs.size() != 1)
+      return StmtError(Diag(expr->getLocStart(), diag::err_asm_atomic_op_has_no_atomic_operands));
   }
 
 

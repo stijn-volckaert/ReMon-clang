@@ -1775,29 +1775,6 @@ QualType Sema::BuildQualifiedType(QualType T, SourceLocation Loc,
     Split.Quals.addCVRQualifiers(CVR);
     return BuildQualifiedType(T, Loc, Split.Quals);
   }
-  else if (getLangOpts().Atomicize) 
-  {
-	  // Treat volatile vars not marked with nonsync as atomics (if they are
-	  // scalar typed)
-	  if ((CVRAU & DeclSpec::TQ_volatile) && 
-		  !T.hasNonSync()) 
-	  {
-		  if (T->isScalarType())
-		  {
-			  SplitQualType Split = T.getSplitUnqualifiedType();
-			  T = BuildAtomicType(QualType(Split.Ty, 0),
-								  DS ? DS->getAtomicSpecLoc() : Loc);
-			  if (T.isNull())
-				  return T;
-			  Split.Quals.addCVRQualifiers(CVR & ~DeclSpec::TQ_volatile);
-			  return BuildQualifiedType(T, Loc, Split.Quals);
-		  }
-		  else
-		  {
-			  T = Context.getNonSyncQualType(T);
-		  }
-	  } 
-  }
 
   Qualifiers Q = Qualifiers::fromCVRMask(CVR);
   Q.setUnaligned(CVRAU & DeclSpec::TQ_unaligned);

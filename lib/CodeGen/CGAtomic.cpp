@@ -1269,18 +1269,27 @@ llvm::Value *AtomicInfo::EmitAtomicLoadOp(llvm::AtomicOrdering AO,
 /// we are operating under /volatile:ms *and* the LValue itself is volatile and
 /// performing such an operation can be performed without a libcall.
 bool CodeGenFunction::LValueIsSuitableForInlineAtomic(LValue LV) {
-  if (!CGM.getCodeGenOpts().MSVolatile) return false;
+  bool Atomicize = CGM.getLangOpts().Atomicize;
+  
+  if (!CGM.getCodeGenOpts().MSVolatile && !Atomicize) return false;
   AtomicInfo AI(*this, LV);
   bool IsVolatile = LV.isVolatile() || hasVolatileMember(LV.getType());
   // An atomic is inline if we don't need to use a libcall.
   bool AtomicIsInline = !AI.shouldUseLibcall();
   // MSVC doesn't seem to do this for types wider than a pointer.
-  if (getContext().getTypeSize(LV.getType()) >
-      getContext().getTypeSize(getContext().getIntPtrType()))
-    return false;
-  return IsVolatile && AtomicIsInline;
+  if (!Atomicize)  
+  {
+	  if (getContext().getTypeSize(LV.getType()) >
+		  getContext().getTypeSize(getContext().getIntPtrType()))
+		  return false;
+	  return IsVolatile && AtomicIsInline;
+  }
+  else
+  {
+	  return IsVolatile && AtomicIsInline && !AI.getAtomicType().getQualifiers().hasNonSync();
+  }
 }
-
+  
 RValue CodeGenFunction::EmitAtomicLoad(LValue LV, SourceLocation SL,
                                        AggValueSlot Slot) {
   llvm::AtomicOrdering AO;

@@ -6002,6 +6002,11 @@ def err_illegal_atomic_pointer_cast : Error<
 def err_illegal_volatile_pointer_cast : Error<
   "Cast from %0 to %1 discards volatile qualifier. This is not allowed in -fatomicize mode.">;
 
+def err_sync_call_requires_volatile : Error<
+  "Argument '%0' of type %1 passed to builtin sync function is not volatile qualified. This is not allowed in -fatomicize mode.">;
+
+def err_atomic_call_requires_volatile : Error<
+  "Argument '%0' of type %1 passed to builtin atomic function is not volatile qualified. This is not allowed in -fatomicize mode.">;
 
 def err_bad_cxx_cast_generic : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
@@ -7079,9 +7084,12 @@ let CategoryName = "Inline Assembly Issue" in {
   def err_asm_invalid_lvalue_in_input : Error<
     "invalid lvalue in asm input for constraint '%0'">;
   def err_asm_atomic_operand : Error<
-      "asm statement has an operand with an atomic type qualifier: '%0' - use stdatomic instead!">;
-  def err_asm_volatile_operand : Error<
-      "asm statement has an operand with a volatile type qualifier: '%0' - use stdatomic instead!">;	  
+      "asm statement has multiple operands with atomic or volatile type qualifiers. This is not allowed in -fatomicize mode. Use C11 atomics instead!">;
+  def err_asm_atomic_op_has_control_flow : Error<
+      "asm statement containing atomic operations has control flow instructions. This is not allowed in -fatomicize mode. Use C11 atomics instead!">;
+  def err_asm_atomic_op_has_no_atomic_operands : Error<
+      "asm statement containing atomic operations has no operands with atomic or volatile type qualifiers. This is not allowed in -fatomicize mode!">;
+
   def err_asm_invalid_input_constraint : Error<
     "invalid input constraint '%0' in asm">;
   def err_asm_immediate_expected : Error<"constraint '%0' expects "
