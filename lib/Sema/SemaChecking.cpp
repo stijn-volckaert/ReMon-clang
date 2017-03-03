@@ -44,6 +44,16 @@
 using namespace clang;
 using namespace sema;
 
+static const Expr* EvalVal(const Expr *E,
+                           SmallVectorImpl<const DeclRefExpr *> &refVars,
+                           const Decl *ParentDecl);
+static const Expr* EvalAddr(const Expr *E,
+                            SmallVectorImpl<const DeclRefExpr *> &refVars,
+                            const Decl *ParentDecl);
+static const Expr* ResolveVal(const Expr *E);
+static const Expr* ResolveAddr(const Expr *E);
+
+
 SourceLocation Sema::getLocationOfStringLiteralByte(const StringLiteral *SL,
                                                     unsigned ByteNo) const {
   return SL->getLocationOfByte(ByteNo, getSourceManager(), LangOpts,
@@ -2624,6 +2634,36 @@ static bool isValidOrderingForOp(int64_t Ordering, AtomicExpr::AtomicOp Op) {
   }
 }
 
+bool Sema::AtomicizeArgQualified(Expr* Ptr, QualType PointeeType, SourceLocation CallLoc, unsigned int DiagCode)
+{
+  if (getLangOpts().Atomicize)
+  {
+    if (!PointeeType.isVolatileQualified() && !PointeeType->isAtomicType())
+    {
+      Diag(CallLoc, DiagCode)
+          << Ptr << Ptr->getType() << Ptr->getSourceRange();
+      const Expr* varExpr = ResolveAddr(Ptr);
+
+      if (varExpr)
+      {
+        if (const MemberExpr* ME = dyn_cast<MemberExpr>(varExpr))
+        {
+          Diag(ME->getMemberDecl()->getLocation(), diag::note_defined_here)
+              << ME->getMemberNameInfo().getAsString();
+        }
+        else
+        {
+          llvm::errs() << "Couldn't resolve declaration\n";
+        }
+      }
+
+      return false;
+    }
+  }
+
+  return true;
+}
+
 ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
                                          AtomicExpr::AtomicOp Op) {
   CallExpr *TheCall = cast<CallExpr>(TheCallResult.get());
@@ -2820,16 +2860,8 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   }
 
   // In -fatomicize mode, require the first arg to be volatile or atomic qualified
-  if (getLangOpts().Atomicize)
-  {
-    if (!ValType.isVolatileQualified() &&
-        !ValType->isAtomicType())
-    {
-      Diag(TheCall->getExprLoc(), diag::err_atomic_call_requires_volatile)
-          << Ptr << Ptr->getType();
-      return ExprError();
-    }
-  }
+  if (!AtomicizeArgQualified(Ptr, ValType, TheCall->getExprLoc(), diag::err_atomic_call_requires_volatile))
+    return ExprError();
 
   switch (ValType.getObjCLifetime()) {
   case Qualifiers::OCL_None:
@@ -3057,16 +3089,8 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   }
 
   // In -fatomicize mode, require the first arg to be volatile or atomic qualified
-  if (getLangOpts().Atomicize)
-  {
-    if (!ValType.isVolatileQualified() &&
-         !ValType->isAtomicType())
-    {
-      Diag(TheCall->getExprLoc(), diag::err_sync_call_requires_volatile)
-          << FirstArg << FirstArg->getType();
-      return ExprError();
-    }
-  }
+  if (!AtomicizeArgQualified(FirstArg, ValType, TheCall->getExprLoc(), diag::err_sync_call_requires_volatile))
+    return ExprError();
 
   switch (ValType.getObjCLifetime()) {
   case Qualifiers::OCL_None:
@@ -7326,13 +7350,6 @@ void Sema::CheckStrncatArguments(const CallExpr *CE,
 
 //===--- CHECK: Return Address of Stack Variable --------------------------===//
 
-static const Expr *EvalVal(const Expr *E,
-                           SmallVectorImpl<const DeclRefExpr *> &refVars,
-                           const Decl *ParentDecl);
-static const Expr *EvalAddr(const Expr *E,
-                            SmallVectorImpl<const DeclRefExpr *> &refVars,
-                            const Decl *ParentDecl);
-
 /// CheckReturnStackAddr - Check if a return statement returns the address
 ///   of a stack variable.
 static void
@@ -7463,7 +7480,9 @@ static const Expr *EvalAddr(const Expr *E,
       // If this is a reference variable, follow through to the expression that
       // it points to.
       if (V->hasLocalStorage() &&
-          V->getType()->isReferenceType() && V->hasInit()) {
+          V->getType()->isReferenceType() &&
+          V->hasInit())
+      {
         // Add the reference variable to the "trail".
         refVars.push_back(DR);
         return EvalAddr(V->getInit(), refVars, ParentDecl);
@@ -7645,7 +7664,6 @@ static const Expr *EvalVal(const Expr *E,
           }
         }
       }
-
       return nullptr;
     }
 
@@ -7657,7 +7675,6 @@ static const Expr *EvalVal(const Expr *E,
 
       if (U->getOpcode() == UO_Deref)
         return EvalAddr(U->getSubExpr(), refVars, ParentDecl);
-
       return nullptr;
     }
 
@@ -7728,6 +7745,231 @@ static const Expr *EvalVal(const Expr *E,
 
       // Everything else: we simply don't reason about them.
       return nullptr;
+    }
+  } while (true);
+}
+
+static const Expr* ResolveAddr(const Expr *E)
+{
+  if (E->isTypeDependent())
+    return nullptr;
+
+  assert((E->getType()->isAnyPointerType() ||
+          E->getType()->isBlockPointerType() ||
+          E->getType()->isObjCQualifiedIdType()) &&
+         "ResolveAddr only works on pointers");
+
+  E = E->IgnoreParens();
+
+  switch (E->getStmtClass())
+  {
+    case Stmt::DeclRefExprClass:
+    {
+      const DeclRefExpr *DR = cast<DeclRefExpr>(E);
+
+      if (const VarDecl *V = dyn_cast<VarDecl>(DR->getDecl()))
+        if (V->getType()->isReferenceType() &&
+            V->hasInit())
+          return ResolveAddr(V->getInit());
+
+      return nullptr;
+    }
+
+    case Stmt::UnaryOperatorClass:
+    {
+      const UnaryOperator *U = cast<UnaryOperator>(E);
+
+      if (U->getOpcode() == UO_AddrOf)
+        return ResolveVal(U->getSubExpr());
+
+      return nullptr;
+    }
+
+    case Stmt::BinaryOperatorClass:
+    {
+      const BinaryOperator *B = cast<BinaryOperator>(E);
+      BinaryOperatorKind op = B->getOpcode();
+
+      if (op != BO_Add && op != BO_Sub)
+        return nullptr;
+
+      const Expr *Base = B->getLHS();
+
+      if (!Base->getType()->isPointerType())
+        Base = B->getRHS();
+
+      assert(Base->getType()->isPointerType());
+      return ResolveAddr(Base);
+    }
+
+    case Stmt::ConditionalOperatorClass:
+    {
+      const ConditionalOperator *C = cast<ConditionalOperator>(E);
+
+      if (const Expr *LHSExpr = C->getLHS())
+        if (!LHSExpr->getType()->isVoidType())
+          if (const Expr *LHS = ResolveAddr(LHSExpr))
+            return LHS;
+
+      if (C->getRHS()->getType()->isVoidType())
+        return nullptr;
+
+      return ResolveAddr(C->getRHS());
+    }
+
+    case Stmt::BlockExprClass:
+      if (cast<BlockExpr>(E)->getBlockDecl()->hasCaptures())
+        return E;
+
+      return nullptr;
+
+    case Stmt::AddrLabelExprClass:
+      return E;
+
+    case Stmt::ExprWithCleanupsClass:
+      return ResolveAddr(cast<ExprWithCleanups>(E)->getSubExpr());
+
+    case Stmt::ImplicitCastExprClass:
+    case Stmt::CStyleCastExprClass:
+    case Stmt::CXXFunctionalCastExprClass:
+    case Stmt::ObjCBridgedCastExprClass:
+    case Stmt::CXXStaticCastExprClass:
+    case Stmt::CXXDynamicCastExprClass:
+    case Stmt::CXXConstCastExprClass:
+    case Stmt::CXXReinterpretCastExprClass:
+    {
+      const Expr* SubExpr = cast<CastExpr>(E)->getSubExpr();
+      switch (cast<CastExpr>(E)->getCastKind())
+      {
+        case CK_LValueToRValue:
+        case CK_NoOp:
+        case CK_BaseToDerived:
+        case CK_DerivedToBase:
+        case CK_UncheckedDerivedToBase:
+        case CK_Dynamic:
+        case CK_CPointerToObjCPointerCast:
+        case CK_BlockPointerToObjCPointerCast:
+        case CK_AnyPointerToBlockPointerCast:
+          return ResolveAddr(SubExpr);
+
+        case CK_ArrayToPointerDecay:
+          return ResolveVal(SubExpr);
+
+        case CK_BitCast:
+          if (SubExpr->getType()->isAnyPointerType() ||
+              SubExpr->getType()->isBlockPointerType() ||
+              SubExpr->getType()->isObjCQualifiedIdType())
+            return ResolveAddr(SubExpr);
+          else
+            return nullptr;
+
+        default:
+          return nullptr;
+      }
+    }
+
+    case Stmt::MaterializeTemporaryExprClass:
+      if (const Expr *Result =
+          ResolveAddr(cast<MaterializeTemporaryExpr>(E)->GetTemporaryExpr()))
+        return Result;
+      return E;
+
+    default:
+      llvm::errs() << "Unhandled Expression in ResolveAddr: \n";
+      E->dump();
+      return nullptr;
+  }
+}
+
+static const Expr *ResolveVal(const Expr *E)
+{
+  do
+  {
+    E = E->IgnoreParens();
+    switch (E->getStmtClass())
+    {
+      case Stmt::ImplicitCastExprClass:
+      {
+        const ImplicitCastExpr *IE = cast<ImplicitCastExpr>(E);
+        if (IE->getValueKind() == VK_LValue)
+        {
+          E = IE->getSubExpr();
+          continue;
+        }
+
+        return nullptr;
+      }
+
+      case Stmt::ExprWithCleanupsClass:
+        return ResolveVal(cast<ExprWithCleanups>(E)->getSubExpr());
+
+      case Stmt::DeclRefExprClass:
+      {
+        const DeclRefExpr *DR = cast<DeclRefExpr>(E);
+
+        if (const VarDecl *V = dyn_cast<VarDecl>(DR->getDecl()))
+        {
+          if (!V->getType()->isReferenceType())
+            return DR;
+
+          if (V->hasInit())
+            return ResolveVal(V->getInit());
+        }
+
+        return nullptr;
+      }
+
+      case Stmt::UnaryOperatorClass:
+      {
+        const UnaryOperator *U = cast<UnaryOperator>(E);
+        if (U->getOpcode() == UO_Deref)
+          return ResolveAddr(U->getSubExpr());
+
+        return nullptr;
+      }
+
+      case Stmt::ArraySubscriptExprClass:
+      {
+        const auto *ASE = cast<ArraySubscriptExpr>(E);
+        if (ASE->isTypeDependent())
+          return nullptr;
+
+        return ResolveAddr(ASE->getBase());
+      }
+
+      case Stmt::OMPArraySectionExprClass:
+        return ResolveAddr(cast<OMPArraySectionExpr>(E)->getBase());
+
+      case Stmt::ConditionalOperatorClass:
+      {
+        const ConditionalOperator *C = cast<ConditionalOperator>(E);
+
+        if (const Expr *LHSExpr = C->getLHS())
+        {
+          if (!LHSExpr->getType()->isVoidType())
+            if (const Expr *LHS = ResolveVal(LHSExpr))
+              return LHS;
+        }
+
+        if (C->getRHS()->getType()->isVoidType())
+          return nullptr;
+
+        return ResolveVal(C->getRHS());
+      }
+
+      case Stmt::MemberExprClass:
+        return E;
+
+      case Stmt::MaterializeTemporaryExprClass:
+        if (const Expr *Result =
+            ResolveVal(cast<MaterializeTemporaryExpr>(E)->GetTemporaryExpr()))
+          return Result;
+        return E;
+
+      default:
+        if (!E->isTypeDependent() && E->isRValue())
+          return E;
+        return nullptr;
     }
   } while (true);
 }

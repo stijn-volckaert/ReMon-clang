@@ -289,6 +289,7 @@ class Sema {
     return isVisible(Old) || New->isExternallyVisible();
   }
   bool shouldLinkPossiblyHiddenDecl(LookupResult &Old, const NamedDecl *New);
+  bool AtomicizeArgQualified(Expr* Ptr, QualType PointeeType, SourceLocation CallLoc, unsigned int DiagCode);
 
 public:
   typedef OpaquePtr<DeclGroupRef> DeclGroupPtrTy;
