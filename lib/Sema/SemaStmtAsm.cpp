@@ -222,6 +222,7 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
 	  std::set<Expr*> qualifiedExprs;
     bool isAtomic = false;
     bool hasControlFlow = false;
+    bool haveMemoryOperands = false;
 
     std::string lower = AsmString->getString().lower();
 
@@ -239,6 +240,20 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
 	  for (unsigned i = 0; i != NumOutputs + NumInputs; ++i)
 	  {
 		  expr = Exprs[i];
+
+      // Look at the constraints to see if this is a memory operand
+      if (!haveMemoryOperands)
+      {
+        auto Constraint = Constraints[i]->getString().str();
+        if (Constraint.find('m') != std::string::npos ||    // memory operand
+            Constraint.find('o') != std::string::npos ||      // memory operand with offsettable address
+            Constraint.find('<') != std::string::npos ||      // memory operand with autodecrement addressing
+            Constraint.find('>') != std::string::npos ||      // memory operand with autoincrement addressing
+            Constraint.find('g') != std::string::npos ||      // register, memory, or immediate operand
+            Constraint.find('X') != std::string::npos)        // any operand
+          haveMemoryOperands = true;
+      }
+
 
       // true if the expr is a pointer to a volatile or atomic qualified variable that is not marked as nonsync
       bool isQualifiedPointer = expr->getType()->isPointerType() &&
@@ -262,7 +277,7 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
       }
 	  }
 
-    if (isAtomic && qualifiedExprs.size() != 1)
+    if (isAtomic && haveMemoryOperands && qualifiedExprs.size() != 1)
       return StmtError(Diag(expr->getLocStart(), diag::err_asm_atomic_op_has_no_atomic_operands));
   }
 
