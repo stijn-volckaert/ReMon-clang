@@ -2651,9 +2651,15 @@ bool Sema::AtomicizeArgQualified(Expr* Ptr, QualType PointeeType, SourceLocation
           Diag(ME->getMemberDecl()->getLocation(), diag::note_defined_here)
               << ME->getMemberNameInfo().getAsString();
         }
+        else if (const DeclRefExpr* DR = dyn_cast<DeclRefExpr>(varExpr))
+        {
+          Diag(DR->getDecl()->getLocation(), diag::note_defined_here)
+              << DR->getNameInfo().getAsString();
+        }
         else
         {
           llvm::errs() << "Couldn't resolve declaration\n";
+          varExpr->dump();
         }
       }
 
