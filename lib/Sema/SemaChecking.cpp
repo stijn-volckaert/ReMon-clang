@@ -2866,7 +2866,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   }
 
   // In -fatomicize mode, require the first arg to be volatile or atomic qualified
-  if (!AtomicizeArgQualified(Ptr, ValType, TheCall->getExprLoc(), diag::err_atomic_call_requires_volatile))
+  if (!AtomicizeArgQualified(Ptr, AtomTy, TheCall->getExprLoc(), diag::err_atomic_call_requires_volatile))
     return ExprError();
 
   switch (ValType.getObjCLifetime()) {
